@@ -49,9 +49,9 @@ functions
     {
         type             forceCoeffs;
         libs             (forces);
-        executeControl   writeTime;
+        executeControl   timeStep;
         executeInterval  1;
-        writeControl     writeTime;
+        writeControl     timeStep;
         writeInterval    1;
         log              false; 
         startTime        0;
@@ -200,32 +200,32 @@ functions
 
     // z-coord = pi*D / 2 for all probes
     probes
-        {
-            type                probes;
-            libs                (sampling);
-            name                probes;
-            executeControl      writeTime;
-            executeInterval     1;
-            writeControl        writeTime;
-            writeInterval       1;
-            startTime           0;
-            fields              (U p);
-            fixedLocations      true;
-            interpolationScheme cell;
+    {
+        type                probes;
+        libs                (sampling);
+        name                probes;
+        executeControl      timeStep;
+        executeInterval     1;
+        writeControl        timeStep;
+        writeInterval       1;
+        startTime           0;
+        fields              (U p);
+        fixedLocations      true;
+        interpolationScheme cell;
 
-            probeLocations      
-            (
-                (0.871 1.066 0.157079633)
-                (0.93 1.069 0.157079633)
-                (1.0 1.0 0.157079633)
-                (1.1 1.0 0.157079633)
-                (1.0 1.059 0.157079633)
-                (0.85 1.0 0.157079633)
-                (0.78271 1.046923 0.157079633) // not exactly as in the paper to avoid probe beeing within the cylinder
+        probeLocations
+        (
+            (0.871 1.066 0.157079633)
+            (0.93 1.069 0.157079633)
+            (1.0 1.0 0.157079633)
+            (1.1 1.0 0.157079633)
+            (1.0 1.059 0.157079633)
+            (0.85 1.0 0.157079633)
+            (0.78271 1.046923 0.157079633) // not exactly as in the paper to avoid probe beeing within the cylinder
 
-            );
-            includeOutOfBounds  false;
-        }
+        );
+        includeOutOfBounds  false;
+    }
 
     fieldAverage
     {
@@ -234,7 +234,7 @@ functions
         executeControl   timeStep;
         executeInterval  1;
         writeControl     writeTime;
-        writeInterval    10;
+        writeInterval    100;
         startTime        0.192;
 
         fields
