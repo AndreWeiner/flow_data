@@ -23,9 +23,9 @@ startTime       0;
 
 stopAt          endTime;
 
-endTime         6;
+endTime         10;        // = 3900 t U/d
 
-deltaT          2.0e-5;
+deltaT          1.0e-5;
 
 writeControl    runTime;
 
@@ -53,7 +53,8 @@ functions
         executeInterval  1;
         writeControl     writeTime;
         writeInterval    1;
-        log false;
+        log              false; 
+        startTime        0;
         patches
         (
             cylinder
@@ -71,27 +72,29 @@ functions
 
     gradU
     {
-        type            grad;
-        libs            (fieldFunctionObjects);
-        field           U;
-        result          gradU;
-        log             true;
+        type             grad;
+        libs             (fieldFunctionObjects);
+        field            U;
+        result           gradU;
+        log              true;
         executeControl   writeTime;
         executeInterval  1;
         writeControl     writeTime;
         writeInterval    1;
+        startTime        0.192;   // U = 39m/s, D = 0.1m -> start at 75 tU/D -> t_tilde_end = 75
     }
 
-    samples
+    sample_planes
     {
-        type            surfaces;
-        libs            (sampling);
-        log             true;
+        type             surfaces;
+        libs             (sampling);
+        log              true;
         executeControl   writeTime;
         executeInterval  1;
         writeControl     writeTime;
         writeInterval    1;
-        surfaceFormat   raw;
+        surfaceFormat    raw;
+        startTime        0.192;
         formatOptions
         {
             raw 
@@ -99,7 +102,7 @@ functions
                 normal true;
             }
         }
-        fields          (gradU);
+        fields          (gradU p U);
         surfaces
         {
             cylinder
@@ -109,7 +112,159 @@ functions
                 interpolate false;
                 invariant true;
             }
+            plane_xz
+            {
+                type    plane;
+                source  cells;
+                point   (0 1 0);
+                normal  (0 1 0);
+            }
+            plane_xy
+            {
+                type    plane;
+                source  cells;
+                point   (0 0 0.157079633);
+                normal  (0 0 1);
+            }
         }
+    }
+
+    sample_lines
+    {
+        type             sets;
+        libs             (sampling);
+        log              true;
+        executeControl   writeTime;
+        executeInterval  1;
+        writeControl     writeTime;
+        writeInterval    1;
+        startTime        0.192;
+        setFormat        csv;
+        fields          (p U UMean pMean UPrime2Mean pPrime2Mean);
+        sets
+        {
+            // line samples @ x/D = 1.06, 1.54, 2.02 (Fig 10) & 5, 7, 10 (Fig 9)), z = pi D/2
+            xD_106
+            {
+                type face;
+                axis y;
+                start (1.106 0 0.157079633);
+                end (1.106 2 0.157079633);
+            }
+            xD_154
+            {
+                type face;
+                axis y;
+                start (1.154 0 0.157079633);
+                end (1.154 2 0.157079633);
+            }
+            xD_202
+            {
+                type face;
+                axis y;
+                start (1.202 0 0.157079633);
+                end (1.202 2 0.157079633);
+            }
+            xD_5
+            {
+                type face;
+                axis y;
+                start (1.5 0 0.157079633);
+                end (1.5 2 0.157079633);
+            }
+            xD_7
+            {
+                type face;
+                axis y;
+                start (1.7 0 0.157079633);
+                end (1.7 2 0.157079633);
+            }
+            xD_10
+            {
+                type face;
+                axis y;
+                start (2.0 0 0.157079633);
+                end (2.0 2 0.157079633);
+            }
+            // wake centerline in streamwise direction
+            yD_1
+            {
+                type face;
+                axis x;
+                start (0.85 1 0.157079633);
+                end (2.4 1 0.157079633);
+            }
+        }
+
+    }
+
+    // z-coord = pi*D / 2 for all probes
+    probes
+        {
+            type                probes;
+            libs                (sampling);
+            name                probes;
+            executeControl      writeTime;
+            executeInterval     1;
+            writeControl        writeTime;
+            writeInterval       1;
+            startTime           0;
+            fields              (U p);
+            fixedLocations      true;
+            interpolationScheme cell;
+
+            probeLocations      
+            (
+                (0.871 1.066 0.157079633)
+                (0.93 1.069 0.157079633)
+                (1.0 1.0 0.157079633)
+                (1.1 1.0 0.157079633)
+                (1.0 1.059 0.157079633)
+                (0.85 1.0 0.157079633)
+                (0.78271 1.046923 0.157079633) // not exactly as in the paper to avoid probe beeing within the cylinder
+
+            );
+            includeOutOfBounds  false;
+        }
+
+    fieldAverage
+    {
+        type             fieldAverage;
+        libs             (fieldFunctionObjects);
+        executeControl   timeStep;
+        executeInterval  1;
+        writeControl     writeTime;
+        writeInterval    10;
+        startTime        0.192;
+
+        fields
+        (
+            U
+            {
+                mean        on;
+                prime2Mean  on;
+                base        time;
+            }
+
+            p
+            {
+                mean        on;
+                prime2Mean  on;
+                base        time;
+            }
+        );
+    }
+
+    residuals
+    {
+            type             solverInfo;
+            libs             ("libutilityFunctionObjects.so");
+            fields           (U p);
+            executeControl   timeStep;
+            executeInterval  1;
+            writeControl     timeStep;
+            writeInterval    1;
+            startTime        0;
     }
 }
 

@@ -25,17 +25,17 @@ radiusOut #eval{ 3 * $radiusIn };
 sin45RIn #eval{ sqrt(2)/2 * $radiusIn };
 sin45ROut #eval{ sqrt(2)/2 * $radiusOut };
 // modify these values to refine the mesh
-blocksInR 40;
-blocksOutR 30;
-blocksCirc 25;
-blocksWake 100;
-blocksInlet 20;
-blocksZ 1;
+blocksInR 90;           // block around cylinder surface
+blocksOutR 75;          // top & bottom (above & under the cylinder)
+blocksCirc 62;          // lines in x-&y-direction of the cylinder's position
+blocksWake 250;          // complete wake (all y for x > cylinder+InR)
+blocksInlet 45;         // everything before the cylinder (cylinder - InR)
+blocksZ 100;
 //
-gradCyl 0.05;
-gradInlet 0.1;
-gradWake 4.0;
-gradSides 0.12;
+gradCyl 0.05;            // grading around cylinder
+gradInlet 0.2;          // grading for the inlet
+gradWake 3.75;           // grading for the wake
+gradSides 0.15;         // grading for areas under & above the cylinder
 
 scale   1;
 

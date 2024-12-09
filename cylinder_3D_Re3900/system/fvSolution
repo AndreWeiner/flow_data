@@ -20,7 +20,7 @@ solvers
     p
     {
         solver           GAMG;
-        smoother         DICGaussSeidel;
+        smoother         GaussSeidel;
         tolerance        1e-06;
         relTol           0.01;
     }
@@ -34,7 +34,7 @@ solvers
     U
     {
         solver          smoothSolver;
-        smoother        symGaussSeidel;
+        smoother        GaussSeidel;
         tolerance       1e-06;
         relTol          0.1;
     }
@@ -70,7 +70,7 @@ PIMPLE
         "(U|p)"
         {
             relTol          0;
-            tolerance       1e-04;
+            tolerance       1e-05;
         }
     }
 }

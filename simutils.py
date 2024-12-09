@@ -33,7 +33,7 @@ def compute_friction_velocity(path: str, filename: str, t_start: float, nu: floa
 
 
 def load_force_coeffs(path, usecols=[0, 1, 4], names=["t", "cx", "cy"]):
-    return read_csv(path, sep="\s+", comment="#", header=None, usecols=usecols, names=names)
+    return read_csv(path, sep=r"\s+", comment="#", header=None, usecols=usecols, names=names)
 
 
 if __name__ == '__main__':
