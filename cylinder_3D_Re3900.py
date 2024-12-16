@@ -5,15 +5,14 @@
      https://github.com/JanisGeise/learning_of_optimized_multigrid_solver_mesh_for_CFD_applications/tree/main/post_processing
 
 """
-from glob import glob
-from typing import Union
-
 import regex as re
 import pandas as pd
 import torch as pt
 import matplotlib.pyplot as plt
 
+from glob import glob
 from os import makedirs
+from typing import Union
 from os.path import join, exists
 from matplotlib.patches import Circle, Rectangle
 
@@ -27,33 +26,43 @@ def get_cfl_number(load_path: str) -> dict:
     :param load_path: path to the top-level directory of the simulation containing the log file from the flow solver
     :return: dict containing the mean and max. Courant numbers
     """
-    with open(join(load_path, f"log.pimpleFoam"), "r") as f:
-        logfile = f.readlines()
+    # check if we have multiple log files, if so sort them
+    try:
+        logs = sorted(glob(join(load_path, f"log.pimpleFoam*")), key=lambda x: int(x.split("_")[-1]))
+    except ValueError:
+        logs = glob(join(load_path, f"log.pimpleFoam*"))
 
-    """
-    solver log file looks something like this:
-
-        Courant Number mean: 0.00156147 max: 0.860588
-    """
-    start_line = False
     data = {"cfl_mean": [], "cfl_max": []}
-    for line in logfile:
-        # omit the initial Courant number (prior starting the time loop)
-        if line.startswith("Starting time loop"):
-            start_line = True
-        if line.startswith("Courant Number mean") and start_line:
-            data["cfl_mean"].append(float(line.split(" ")[3]))
-            data["cfl_max"].append(float(line.split(" ")[-1].strip("\n")))
-        else:
-            continue
+    for log in logs:
+        with open(log, "r") as f:
+            logfile = f.readlines()
+
+        """
+        solver log file looks something like this:
+    
+            Courant Number mean: 0.00156147 max: 0.860588
+        """
+        start_line = False
+        for line in logfile:
+            # omit the initial Courant number (prior starting the time loop)
+            if line.startswith("Starting time loop"):
+                start_line = True
+            if line.startswith("Courant Number mean") and start_line:
+                data["cfl_mean"].append(float(line.split(" ")[3]))
+                data["cfl_max"].append(float(line.split(" ")[-1].strip("\n")))
+            else:
+                continue
 
     return data
 
 
 def load_residuals(load_path: str):
-    return pd.read_csv(load_path, skiprows=2, delimiter=r"\s+", header=None, usecols=[0, 2, 3, 5, 6, 8, 9, 13, 14],
+    dirs = sorted(glob(join(load_path, "postProcessing", "residuals", "*")), key=lambda x: float(x.split("/")[-1]))
+    res = [pd.read_csv(join(p, "solverInfo.dat"), delimiter=r"\s+", skiprows=2, header=None,
+                       usecols=[0, 2, 3, 5, 6, 8, 9, 13, 14],
                        names=["t", "Ux_start", "Ux_end", "Uy_start", "Uy_end", "Uz_start", "Uz_end", "p_start",
-                              "p_end"])
+                              "p_end"]) for p in dirs]
+    return res[0] if len(res) == 1 else pd.concat(res)
 
 
 def get_pimple_iterations(load_path: str) -> list:
@@ -64,10 +73,21 @@ def get_pimple_iterations(load_path: str) -> list:
     :return: dict containing the mean and max. Courant numbers, and if present the mean and max. CFL from the interface
     """
     pattern = [r"PIMPLE: not converged within ", r"PIMPLE: converged in "]
-    with open(join(load_path, f"log.pimpleFoam"), "r") as f:
-        logfile = f.readlines()
 
-    data = [int(line.split(" ")[-2]) for line in logfile if line.startswith(pattern[0]) or line.startswith(pattern[1])]
+    # check if we have multiple log files, if so sort them
+    try:
+        logs = sorted(glob(join(load_path, f"log.pimpleFoam*")), key=lambda x: int(x.split("_")[-1]))
+    except ValueError:
+        logs = glob(join(load_path, f"log.pimpleFoam*"))
+
+    data = []
+    for log in logs:
+        with open(log, "r") as f:
+            logfile = f.readlines()
+
+        for line in logfile:
+            if line.startswith(pattern[0]) or line.startswith(pattern[1]):
+                data.append(int(line.split(" ")[-2]))
     return data
 
 
@@ -94,30 +114,35 @@ def load_probes(load_path: str, num_probes: int, filename: str = "p", skip_n_poi
     :param skip_n_points: offset, in case we don't want to read in the 1st N time steps of the values
     :return: dataframe containing the values for each probe
     """
-    # skip header, header = n_probes + 2 lines containing probe no. and time header
-    if filename.startswith("p"):
-        names = ["time"] + [f"{filename}_probe_{pb}" for pb in range(num_probes)]
-        probe = pd.read_table(join(load_path, "postProcessing", "probes", "0", filename), sep=r"\s+",
-                              skiprows=(num_probes + 2) + skip_n_points, header=None, names=names)
-    else:
-        names = ["time"]
-        for pb in range(num_probes):
-            names += [f"{k}_probe_{pb}" for k in ["ux", "uy", "uz"]]
+    dirs = sorted(glob(join(load_path, "postProcessing", "probes", "*")), key=lambda x: float(x.split("/")[-1]))
+    _probes = []
 
-        probe = pd.read_table(join(load_path, "postProcessing", "probes", "0", filename), sep=r"\s+",
-                              skiprows=(num_probes + 2) + skip_n_points, header=None, names=names)
+    for d in dirs:
+        # skip header, header = n_probes + 2 lines containing probe no. and time header
+        if filename.startswith("p"):
+            names = ["time"] + [f"{filename}_probe_{pb}" for pb in range(num_probes)]
+            probe = pd.read_table(join(d, filename), sep=r"\s+", skiprows=(num_probes + 2) + skip_n_points, header=None,
+                                  names=names)
+        else:
+            names = ["time"]
+            for pb in range(num_probes):
+                names += [f"{k}_probe_{pb}" for k in ["ux", "uy", "uz"]]
 
-        # replace all parentheses, because (ux u_y uz) is separated since all columns are separated with white space
-        # as well
-        for k in names:
-            if k.startswith("ux"):
-                probe[k] = probe[k].str.replace("(", "", regex=True).astype(float)
-            elif k.startswith("uz"):
-                probe[k] = probe[k].str.replace(")", "", regex=True).astype(float)
-            else:
-                continue
+            probe = pd.read_table(join(d, filename), sep=r"\s+", skiprows=(num_probes + 2) + skip_n_points, header=None,
+                                  names=names)
 
-    return probe
+            # replace all parentheses, because (ux u_y uz) is separated since all columns are separated with white space
+            # as well
+            for k in names:
+                if k.startswith("ux"):
+                    probe[k] = probe[k].str.replace("(", "", regex=True).astype(float)
+                elif k.startswith("uz"):
+                    probe[k] = probe[k].str.replace(")", "", regex=True).astype(float)
+                else:
+                    continue
+        _probes.append(probe)
+
+    return _probes[0] if len(_probes) == 1 else pd.concat(_probes)
 
 
 def load_line_samples(load_path: str, loc: list):
@@ -125,26 +150,21 @@ def load_line_samples(load_path: str, loc: list):
     names = ["coord", "p", "pMean", "pPrime2Mean", "Ux", "Uy", "Uz", "UxMean", "UyMean", "UzMean", "UxxP2Mean",
              "UxyP2Mean", "UyxP2Mean", "UyyP2Mean", "UzxP2Mean", "UzzP2Mean"]
 
-    all_lines_mean, all_lines_std, coords = [], [], []
+    all_lines, coords = [], []
     for l in loc:
-        lines = []
-        # skip the zero directory
+        # use the last time step
         files = sorted(glob(join(load_path, "postProcessing", "sample_lines", "*", f"*_{l}_*.csv")),
-                       key=lambda x: float(x.split("/")[-2]))[1:]
+                       key=lambda x: float(x.split("/")[-2]))[-1]
 
-        # we only need to load the coordinates once since they're not changing
-        coords.append(pt.tensor(pd.read_csv(files[0], skiprows=1, header=None, names=["x", "y", "z"],
+        # load the coordinates
+        coords.append(pt.tensor(pd.read_csv(files, skiprows=1, header=None, names=["x", "y", "z"],
                                             usecols=range(0, 3)).values))
 
-        for file in files:
-            lines.append(pt.tensor(pd.read_csv(file, names=names, header=None, sep=",", skiprows=1,
+        # load the file containing the data
+        all_lines.append(pt.tensor(pd.read_csv(files, names=names, header=None, sep=",", skiprows=1,
                                                usecols=range(len(names))).values).unsqueeze(-1))
-        lines = pt.cat(lines, dim=-1)
 
-        # compute mean and std. dev.
-        all_lines_mean.append(lines.mean(-1))
-        all_lines_std.append(lines.std(-1))
-    return coords, all_lines_mean, all_lines_std
+    return coords, all_lines
 
 
 def load_sampling_planes(load_path: str, name: str):
@@ -234,10 +254,10 @@ if __name__ == "__main__":
     # define load and save path
     # load_dir = join("/media", "janis", "Elements", "FOR_data", "cylinder_3D_Re3900_tests")
     load_dir = join("run", "cylinder_3D_Re3900")
-    save_dir = join("run", "cylinder_3D_Re3900", "plots")
+    save_dir = join("run", "cylinder_3D_Re3900", "plots_final")
 
     # cases to compare
-    cases = ["cylinder_3D_Re3900_mesh0", "cylinder_3D_Re3900_mesh1"]
+    cases = ["cylinder_3D_Re3900"]
 
     # flow quantities
     u_inf = 39
@@ -257,7 +277,7 @@ if __name__ == "__main__":
 
     # """
     # load and plot the residuals
-    residuals = [load_residuals(join(load_dir, c, "postProcessing", "residuals", "0", "solverInfo.dat")) for c in cases]
+    residuals = [load_residuals(join(load_dir, c)) for c in cases]
 
     for i in range(len(cases)):
         fig, ax = plt.subplots(2, 1, sharex="col", figsize=(6, 4))
@@ -318,13 +338,14 @@ if __name__ == "__main__":
     plt.close("all")
 
     # load and plot the force coefficients
-    forces = [load_force_coeffs(join(load_dir, c, "postProcessing", "forces", "0", "coefficient.dat")) for c in cases]
+    forces = [load_force_coeffs(join(load_dir, c)) for c in cases]
 
     fig, ax = plt.subplots(2, 1, figsize=(6, 4), sharex="col")
 
     for i in range(len(cases)):
         ax[0].plot(forces[i].t * u_inf / d, forces[i].cx, label=f"mesh {i}")
         ax[1].plot(forces[i].t * u_inf / d, forces[i].cy)
+        ax[i].set_ylim(0.85, 1.05)
     ax[0].set_ylabel(r"$c_d$")
     ax[1].set_ylabel(r"$c_l$")
     ax[-1].set_xlabel(r"$t \frac{U_{\infty}}{d}$")
@@ -365,14 +386,14 @@ if __name__ == "__main__":
     phi, u_tau_mean, u_tau_std, grad_u_mean, grad_u_std = [], [], [], [], []
 
     # estimation of the normal distance to the first cell center (done in paraview) for computing approx. y+
-    y0 = [0.0000805, 0.0000675, 0.000054]
+    # y0 = [0.0000805, 0.0000675, 0.000054]
     for i in range(len(cases)):
         u_tau_tmp = pt.cat([u.unsqueeze(-1) for u in u_tau[i]], dim=-1)
         grad_u_tmp = pt.cat([u.unsqueeze(-1) for u in grad_u[i]], dim=-1)
 
-        # estimate min. / max. y+ TODO: re-check y+ -> unreasonable small
-        print(f"y+ (min. / max.) for case {i}: {round((rho * y0[i] * u_tau_tmp / nu).min().item(), 4)}, "
-              f"{round((rho * y0[i] * u_tau_tmp / nu).max().item(), 4)}")
+        # estimate min. / max. y+
+        # print(f"y+ (min. / max.) for case {i}: {round((rho * y0[i] * u_tau_tmp / nu).min().item(), 4)}, "
+        #       f"{round((rho * y0[i] * u_tau_tmp / nu).max().item(), 4)}")
 
         # compute avg. u_tau and grad_u wrt z-coordinate for temporal mean and std. deviation
         phi_tmp, u_tau_mean_tmp = compute_phi(coordinates[i], u_tau_tmp.mean(-1))
@@ -443,7 +464,7 @@ if __name__ == "__main__":
     for i, case in enumerate(cases):
         ax.plot(phi[i] + 180, cp_avg_over_z[i], label=f"mesh {i}")
     ax.set_xlabel(r"$\phi$ $[^\circ]$")
-    ax.set_ylabel("$c_p$")
+    ax.set_ylabel("$\overline{c}_p$")
     ax.set_xlim(0, 360)
     fig.tight_layout()
     fig.legend(ncol=len(cases), loc="upper center")
@@ -454,7 +475,7 @@ if __name__ == "__main__":
     # plot UMean line for the wake in x-direction along the wake (fig. 8)
     line_samples_mean = []
     for c in cases:
-        _, line_samples_mean_tmp, _ = load_line_samples(join(load_dir, c), ["1"])
+        _, line_samples_mean_tmp = load_line_samples(join(load_dir, c), ["1"])
         line_samples_mean.append(line_samples_mean_tmp)
     del _, line_samples_mean_tmp
 
@@ -479,10 +500,10 @@ if __name__ == "__main__":
     # plot UMean (fig. 9)
     coordinates, line_samples_mean = [], []
     for c in cases:
-        coord, line_samples_mean_tmp, _ = load_line_samples(join(load_dir, c), ["5", "7", "10"])
+        coord, line_samples_mean_tmp = load_line_samples(join(load_dir, c), ["5", "7", "10"])
         coordinates.append(coord)
         line_samples_mean.append(line_samples_mean_tmp)
-    del _, line_samples_mean_tmp, coord
+    del line_samples_mean_tmp, coord
 
     fig, ax = plt.subplots(1, 3, figsize=(6, 4), sharey="row")
     for col in range(len(line_samples_mean[0])):
@@ -503,10 +524,10 @@ if __name__ == "__main__":
     # load line samples for Re stresses
     coordinates, line_samples_mean = [], []
     for c in cases:
-        coord, line_samples_mean_tmp, _ = load_line_samples(join(load_dir, c), ["106", "154", "202"])
+        coord, line_samples_mean_tmp = load_line_samples(join(load_dir, c), ["106", "154", "202"])
         line_samples_mean.append(line_samples_mean_tmp)
         coordinates.append(coord)
-    del _, line_samples_mean_tmp, coord
+    del line_samples_mean_tmp, coord
 
     # plot UMean and UPrime2Mean (fig. 10)      TODO: check assignment of Re stresses
     fig, ax = plt.subplots(nrows=3, ncols=2, sharex="all", sharey="col", figsize=(6, 6))

@@ -1,11 +1,14 @@
 """Helper functions for loading and processing simulation data.
 """
-
 import sys
-from os import environ
 import torch as pt
-from pandas import read_csv
+from glob import glob
+
+from os import environ
+from os.path import join
+from pandas import read_csv, concat
 from dotenv import load_dotenv
+
 load_dotenv()
 sys.path.insert(0, environ.get("FLOWTORCH_INSTALL_DIR"))
 from flowtorch.data import CSVDataloader
@@ -33,7 +36,10 @@ def compute_friction_velocity(path: str, filename: str, t_start: float, nu: floa
 
 
 def load_force_coeffs(path, usecols=[0, 1, 4], names=["t", "cx", "cy"]):
-    return read_csv(path, sep=r"\s+", comment="#", header=None, usecols=usecols, names=names)
+    dirs = sorted(glob(join(path, "postProcessing", "forces", "*")), key=lambda x: float(x.split("/")[-1]))
+    coeffs = [read_csv(join(p, "coefficient.dat"), sep=r"\s+", comment="#", header=None, usecols=usecols, names=names)
+              for p in dirs]
+    return coeffs[0] if len(coeffs) == 1 else concat(coeffs)
 
 
 if __name__ == '__main__':
