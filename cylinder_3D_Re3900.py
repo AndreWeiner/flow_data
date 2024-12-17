@@ -252,8 +252,8 @@ def plot_probes(save_path: str, data: list, num_probes: int = 10, title: str = "
 
 if __name__ == "__main__":
     # define load and save path
-    # load_dir = join("/media", "janis", "Elements", "FOR_data", "cylinder_3D_Re3900_tests")
-    load_dir = join("run", "cylinder_3D_Re3900")
+    load_dir = join("/media", "janis", "Elements1", "Janis", "cylinder_3D_Re3900_tests")
+    # load_dir = join("run", "cylinder_3D_Re3900")
     save_dir = join("run", "cylinder_3D_Re3900", "plots_final")
 
     # cases to compare
@@ -369,7 +369,7 @@ if __name__ == "__main__":
                         num_probes=n_probes, legend_list=[f"mesh {i}" for i in range(len(cases))])
                         
     # compute u_tau
-    t_start = 0.15
+    t_start = 0.19225           # start after 75 CTU
     u_tau, grad_u = [], []
     for c in cases:
         _, _, _, _, u_tau_tmp, grad_u_tmp = compute_friction_velocity(join(load_dir, c, "postProcessing",
@@ -464,7 +464,7 @@ if __name__ == "__main__":
     for i, case in enumerate(cases):
         ax.plot(phi[i] + 180, cp_avg_over_z[i], label=f"mesh {i}")
     ax.set_xlabel(r"$\phi$ $[^\circ]$")
-    ax.set_ylabel("$\overline{c}_p$")
+    ax.set_ylabel(r"$\overline{c}_p$")
     ax.set_xlim(0, 360)
     fig.tight_layout()
     fig.legend(ncol=len(cases), loc="upper center")

@@ -32,6 +32,6 @@ runParallel postProcess -func "writeCellVolumes" -constant -time none
 mv log.postProcess log.postProcess.writeCellVolumes
 
 # cleaning up
-find ./ -type f \( -name "phi" -o -name "phi_0" -o -name "U_0" -o -name "gradU" \) -exec rm {} \;
+# find ./ -type f \( -name "phi" -o -name "phi_0" -o -name "U_0" -o -name "gradU" \) -exec rm {} \;
 
 #------------------------------------------------------------------------------

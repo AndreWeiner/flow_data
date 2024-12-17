@@ -19,7 +19,7 @@ sed -i "s/^deltaT.*/deltaT          2.0e-3;/" system/controlDict
 
 # mesh creation
 runApplication blockMesh
-runApplication checkMesh -allGeometry -allTopology -writeAllFields
+runApplication checkMesh -allGeometry -allTopology
 
 # set inlet velocity
 cp -r 0.org 0

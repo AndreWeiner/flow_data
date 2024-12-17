@@ -29,7 +29,7 @@ deltaT          1.0e-5;
 
 writeControl    runTime;
 
-writeInterval   1.0e-3;
+writeInterval   2.5e-4;
 
 purgeWrite      0;
 
@@ -77,11 +77,11 @@ functions
         field            U;
         result           gradU;
         log              true;
-        executeControl   writeTime;
+        executeControl   timeStep;
         executeInterval  1;
-        writeControl     writeTime;
-        writeInterval    1;
-        startTime        0.192;   // U = 39m/s, D = 0.1m -> start at 75 tU/D -> t_tilde_end = 75
+        writeControl     timeStep;
+        writeInterval    25;
+        startTime        0.19225;   // U = 39m/s, D = 0.1m -> start at 75 tU/D -> t_tilde_end = 75
     }
 
     sample_planes
@@ -89,12 +89,12 @@ functions
         type             surfaces;
         libs             (sampling);
         log              true;
-        executeControl   writeTime;
+        executeControl   timeStep;
         executeInterval  1;
-        writeControl     writeTime;
-        writeInterval    1;
+        writeControl     timeStep;
+        writeInterval    25;
         surfaceFormat    raw;
-        startTime        0.192;
+        startTime        0.19225;
         formatOptions
         {
             raw 
@@ -134,11 +134,11 @@ functions
         type             sets;
         libs             (sampling);
         log              true;
-        executeControl   writeTime;
+        executeControl   timeStep;
         executeInterval  1;
-        writeControl     writeTime;
-        writeInterval    1;
-        startTime        0.192;
+        writeControl     timeStep;
+        writeInterval    25;
+        startTime        0.19225;
         setFormat        csv;
         fields          (p U UMean pMean UPrime2Mean pPrime2Mean);
         sets
@@ -221,7 +221,7 @@ functions
             (1.1 1.0 0.157079633)
             (1.0 1.059 0.157079633)
             (0.85 1.0 0.157079633)
-            (0.78271 1.046923 0.157079633) // not exactly as in the paper to avoid probe beeing within the cylinder
+            (0.78271 1.046923 0.157079633) // not exactly as in the paper to avoid probe being within the cylinder
 
         );
         includeOutOfBounds  false;
@@ -235,7 +235,7 @@ functions
         executeInterval  1;
         writeControl     writeTime;
         writeInterval    100;
-        startTime        0.192;
+        startTime        0.19225;
 
         fields
         (
