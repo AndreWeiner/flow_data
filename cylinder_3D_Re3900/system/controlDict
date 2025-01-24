@@ -23,7 +23,7 @@ startTime       0;
 
 stopAt          endTime;
 
-endTime         10;        // = 3900 t U/d
+endTime         10;        // = 3900 t U/d, 0.3s ~= 117.2 CTU ~= 25 vortex shedding cycles cl, 1 CTU = d/U = 0.00256
 
 deltaT          1.0e-5;
 

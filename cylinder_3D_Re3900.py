@@ -9,6 +9,7 @@ import regex as re
 import pandas as pd
 import torch as pt
 import matplotlib.pyplot as plt
+from flowtorch.data import CSVDataloader
 
 from glob import glob
 from os import makedirs
@@ -152,7 +153,7 @@ def load_line_samples(load_path: str, loc: list):
 
     all_lines, coords = [], []
     for l in loc:
-        # use the last time step
+        # use the last time step since we are only using the mean values
         files = sorted(glob(join(load_path, "postProcessing", "sample_lines", "*", f"*_{l}_*.csv")),
                        key=lambda x: float(x.split("/")[-2]))[-1]
 
@@ -167,37 +168,11 @@ def load_line_samples(load_path: str, loc: list):
     return coords, all_lines
 
 
-def load_sampling_planes(load_path: str, name: str):
-    planes = []
-
-    # now loop over the time folders and load the data
-    files = glob(join(load_path, "postProcessing", "sample_planes", "*", name))
-
-    # we only need to load the coordinates once since they're not changing
-    coords = pd.read_csv(files[0], skiprows=2, header=None, names=["x", "y", "z"], usecols=range(0, 3), sep=r"\s+")
-
-    for file in sorted(files, key=lambda x: float(x.split("/")[-2])):
-        if name.startswith("U"):
-            planes.append(pt.tensor(pd.read_csv(file, skiprows=2, header=None, names=["Ux", "Uy", "Uz"],
-                                                usecols=range(3, 6), sep=r"\s+").values).unsqueeze(-1))
-        else:
-            planes.append(pt.tensor(pd.read_csv(file, skiprows=2, header=None, names=["p"],
-                                                usecols=[3], sep=r"\s+").values).unsqueeze(-1))
-
-    return pt.tensor(coords.values), pt.cat(planes, dim=-1)
-
-
-def load_surface_coordinates(load_path: str, name: str, cylinder_pos: Union[tuple, list]):
-    coords, _ = load_sampling_planes(load_path, name)
-
+def compute_phi(coords: pt.Tensor, param, cylinder_pos):
     # account for the shift wrt cylinder's origin
     coords[:, 0] -= cylinder_pos[0]
     coords[:, 1] -= cylinder_pos[1]
 
-    return coords
-
-
-def compute_phi(coords: pt.Tensor, param):
     # compute phi
     angle = pt.atan2(coords[:, 1], coords[:, 0]).rad2deg()
 
@@ -252,8 +227,7 @@ def plot_probes(save_path: str, data: list, num_probes: int = 10, title: str = "
 
 if __name__ == "__main__":
     # define load and save path
-    load_dir = join("/media", "janis", "Elements1", "Janis", "cylinder_3D_Re3900_tests")
-    # load_dir = join("run", "cylinder_3D_Re3900")
+    load_dir = join("/media", "janis", "Elements", "Janis", "cylinder_3D_Re3900_tests")
     save_dir = join("run", "cylinder_3D_Re3900", "plots_final")
 
     # cases to compare
@@ -275,7 +249,7 @@ if __name__ == "__main__":
     # use latex fonts
     plt.rcParams.update({"text.usetex": True, "figure.dpi": 360})
 
-    # """
+    """
     # load and plot the residuals
     residuals = [load_residuals(join(load_dir, c)) for c in cases]
 
@@ -300,7 +274,7 @@ if __name__ == "__main__":
         fig.tight_layout()
         fig.subplots_adjust(top=0.9)
         fig.legend(loc="upper center", ncols=4)
-        plt.savefig(join(save_dir, f"residuals_vs_t_mesh_{i}.png"))
+        plt.savefig(join(save_dir, f"residuals_vs_t_case_{i}.png"))
         plt.close("all")
 
     # get the Courant number from solver log and plot it
@@ -318,7 +292,7 @@ if __name__ == "__main__":
         fig.tight_layout()
         fig.subplots_adjust()
         ax.legend(loc="upper right", ncols=4)
-        plt.savefig(join(save_dir, f"courant_vs_t_mesh_{i}.png"))
+        plt.savefig(join(save_dir, f"courant_vs_t_case_{i}.png"))
         plt.close("all")
 
     # check PIMPLE iterations
@@ -327,7 +301,7 @@ if __name__ == "__main__":
     fig, ax = plt.subplots(1, 1, figsize=(6, 3))
     for i in range(len(cases)):
         t = pt.linspace(residuals[i].t.iloc[0], residuals[i].t.iloc[-1], len(n_iter[i])) * u_inf / d
-        ax.plot(t, n_iter[i], label=f"mesh {i}")
+        ax.plot(t, n_iter[i], label=f"case {i}")
     ax.set_xlabel(r"$t \frac{U_{\infty}}{d}$")
     ax.set_ylabel("$N_{PIMPLE}$")
     ax.set_xlim(residuals[0].t.iloc[0], residuals[0].t.iloc[-1] * u_inf / d)
@@ -336,6 +310,7 @@ if __name__ == "__main__":
     fig.subplots_adjust(top=0.88)
     plt.savefig(join(save_dir, "n_pimple_iter_vs_t.png"))
     plt.close("all")
+    # """
 
     # load and plot the force coefficients
     forces = [load_force_coeffs(join(load_dir, c)) for c in cases]
@@ -343,9 +318,9 @@ if __name__ == "__main__":
     fig, ax = plt.subplots(2, 1, figsize=(6, 4), sharex="col")
 
     for i in range(len(cases)):
-        ax[0].plot(forces[i].t * u_inf / d, forces[i].cx, label=f"mesh {i}")
+        ax[0].plot(forces[i].t * u_inf / d, forces[i].cx, label=f"case {i}")
         ax[1].plot(forces[i].t * u_inf / d, forces[i].cy)
-        ax[i].set_ylim(0.85, 1.05)
+        ax[i].set_ylim(0.85, 1.15)
     ax[0].set_ylabel(r"$c_d$")
     ax[1].set_ylabel(r"$c_l$")
     ax[-1].set_xlabel(r"$t \frac{U_{\infty}}{d}$")
@@ -363,10 +338,10 @@ if __name__ == "__main__":
         if p == "U":
             for i in ["ux", "uy", "uz"]:
                 plot_probes(save_dir, probes, param=i, scaling_factor=u_inf / d, xlabel=r"$t \frac{U_{\infty}}{d}$",
-                            num_probes=n_probes, legend_list=[f"mesh {i}" for i in range(len(cases))])
+                            num_probes=n_probes, legend_list=[f"case {i}" for i in range(len(cases))])
         else:
             plot_probes(save_dir, probes, param=p, scaling_factor=u_inf / d, xlabel=r"$t \frac{U_{\infty}}{d}$",
-                        num_probes=n_probes, legend_list=[f"mesh {i}" for i in range(len(cases))])
+                        num_probes=n_probes, legend_list=[f"case {i}" for i in range(len(cases))])
                         
     # compute u_tau
     t_start = 0.19225           # start after 75 CTU
@@ -380,26 +355,20 @@ if __name__ == "__main__":
     del _, u_tau_tmp, grad_u_tmp
 
     # load the coordinates of the cylinder surface
-    coordinates = [load_surface_coordinates(join(load_dir, c), "gradU_cylinder.raw", cylinder_position) for c in cases]
+    loader = [CSVDataloader.from_foam_surface(join(load_dir, c), "gradU_cylinder.raw") for c in cases]
 
     # compute mean and std. dev. of u_tau
     phi, u_tau_mean, u_tau_std, grad_u_mean, grad_u_std = [], [], [], [], []
 
-    # estimation of the normal distance to the first cell center (done in paraview) for computing approx. y+
-    # y0 = [0.0000805, 0.0000675, 0.000054]
     for i in range(len(cases)):
         u_tau_tmp = pt.cat([u.unsqueeze(-1) for u in u_tau[i]], dim=-1)
         grad_u_tmp = pt.cat([u.unsqueeze(-1) for u in grad_u[i]], dim=-1)
 
-        # estimate min. / max. y+
-        # print(f"y+ (min. / max.) for case {i}: {round((rho * y0[i] * u_tau_tmp / nu).min().item(), 4)}, "
-        #       f"{round((rho * y0[i] * u_tau_tmp / nu).max().item(), 4)}")
-
         # compute avg. u_tau and grad_u wrt z-coordinate for temporal mean and std. deviation
-        phi_tmp, u_tau_mean_tmp = compute_phi(coordinates[i], u_tau_tmp.mean(-1))
-        _, u_tau_std_tmp = compute_phi(coordinates[i], u_tau_tmp.std(-1))
-        _, grad_u_mean_tmp = compute_phi(coordinates[i], grad_u_tmp.mean(-1))
-        _, grad_u_std_tmp = compute_phi(coordinates[i], grad_u_tmp.std(-1))
+        phi_tmp, u_tau_mean_tmp = compute_phi(loader[i].vertices, u_tau_tmp.mean(-1), cylinder_position)
+        _, u_tau_std_tmp = compute_phi(loader[i].vertices, u_tau_tmp.std(-1), cylinder_position)
+        _, grad_u_mean_tmp = compute_phi(loader[i].vertices, grad_u_tmp.mean(-1), cylinder_position)
+        _, grad_u_std_tmp = compute_phi(loader[i].vertices, grad_u_tmp.std(-1), cylinder_position)
 
         phi.append(phi_tmp)
         u_tau_mean.append(u_tau_mean_tmp)
@@ -412,7 +381,7 @@ if __name__ == "__main__":
     # plot u_tau and avg. grad_u
     fig, ax = plt.subplots(5, 2, figsize=(6, 5), sharex="col")
     for i in range(len(cases)):
-        ax[0][0].plot(phi[i] + 180, u_tau_mean[i] / u_inf, label=f"mesh {i}")
+        ax[0][0].plot(phi[i] + 180, u_tau_mean[i] / u_inf, label=f"case {i}")
         ax[0][1].plot(phi[i] + 180, u_tau_std[i] / u_inf)
 
         # du/dx
@@ -434,7 +403,7 @@ if __name__ == "__main__":
     ax[3][0].set_ylabel(r"$\partial_{\tilde{y}} \tilde{u}$")
     ax[4][0].set_ylabel(r"$\partial_{\tilde{x}} \tilde{v}$")
 
-    # remaining mesh
+    # remaining case
     ax[0][0].set_title("mean")
     ax[0][1].set_title("std.")
     ax[-1][0].set_xlim(0, 360)
@@ -444,25 +413,28 @@ if __name__ == "__main__":
     fig.subplots_adjust(top=0.88)
     plt.savefig(join(save_dir, "u_tau_mean_vs_phi.png"))
     plt.close("all")
+    del grad_u_std, grad_u_mean, u_tau_mean, u_tau_std
 
     # plot cp vs. angle phi, the cylinder coordinates remain the same (fig. 7)
     phi, cp_avg_over_z = [], []
     for i in range(len(cases)):
-        _, p_tmp = load_sampling_planes(join(load_dir, cases[i]), "p_cylinder.raw")
+        loader = CSVDataloader.from_foam_surface(join(load_dir, cases[i], "postProcessing", "sample_planes"),
+                                                 "p_cylinder.raw")
+        p = loader.load_snapshot("p", loader.write_times)
 
         # compute mean cp distribution, cp and transform cartesian coordinates to angle, compare:
         # https://www.openfoam.com/documentation/guides/latest/doc/guide-fos-field-pressure.html
-        cp_tmp = 2 * p_tmp.mean(-1).squeeze() / (rho * u_inf ** 2)
-        phi_tmp, cp_avg_over_z_tmp = compute_phi(coordinates[i], cp_tmp)
+        cp_tmp = 2 * p.mean(-1).squeeze() / (rho * u_inf ** 2)
+        phi_tmp, cp_avg_over_z_tmp = compute_phi(loader.vertices, cp_tmp, cylinder_position)
         phi.append(phi_tmp)
         cp_avg_over_z.append(cp_avg_over_z_tmp)
 
-    del _, cp_avg_over_z_tmp, phi_tmp, cp_tmp
+    del cp_avg_over_z_tmp, phi_tmp, cp_tmp, p
 
     # plot avg. cp vs. cylinder angle
     fig, ax = plt.subplots(1, 1, figsize=(6, 3))
     for i, case in enumerate(cases):
-        ax.plot(phi[i] + 180, cp_avg_over_z[i], label=f"mesh {i}")
+        ax.plot(phi[i] + 180, cp_avg_over_z[i], label=f"case {i}")
     ax.set_xlabel(r"$\phi$ $[^\circ]$")
     ax.set_ylabel(r"$\overline{c}_p$")
     ax.set_xlim(0, 360)
@@ -471,6 +443,7 @@ if __name__ == "__main__":
     fig.subplots_adjust(top=0.88)
     plt.savefig(join(save_dir, "cp_vs_phi.png"))
     plt.close("all")
+    del phi, cp_avg_over_z
 
     # plot UMean line for the wake in x-direction along the wake (fig. 8)
     line_samples_mean = []
@@ -483,7 +456,7 @@ if __name__ == "__main__":
     for j in range(len(cases)):
         for i in range(len(line_samples_mean[j])):
             if i == 0:
-                ax[0].plot(line_samples_mean[j][i][:, 0] / d, line_samples_mean[j][i][:, 7] / u_inf, label=f"mesh {j}")
+                ax[0].plot(line_samples_mean[j][i][:, 0] / d, line_samples_mean[j][i][:, 7] / u_inf, label=f"case {j}")
             else:
                 ax[0].plot(line_samples_mean[j][i][:, 0] / d, line_samples_mean[j][i][:, 7] / u_inf)
             ax[1].plot(line_samples_mean[j][i][:, 0] / d, line_samples_mean[j][i][:, -1] / u_inf ** 2)
@@ -509,7 +482,7 @@ if __name__ == "__main__":
     for col in range(len(line_samples_mean[0])):
         for i in range(len(cases)):
             ax[col].plot(line_samples_mean[i][col][:, 7] / u_inf, line_samples_mean[i][col][:, 0] / d,
-                         label=f"mesh {i}")
+                         label=f"case {i}")
         ax[col].set_xlabel(r"$\overline{u} / U_{\infty}$")
     ax[0].set_ylabel(r"$y / D$")
     for i, l in enumerate(["5", "7", "10"]):
@@ -535,7 +508,7 @@ if __name__ == "__main__":
         for i in range(len(cases)):
             if row == 0:
                 ax[row][0].plot(coordinates[i][row][:, 0] / d, line_samples_mean[i][row][:, 7] / u_inf,
-                                label=f"mesh {i}")
+                                label=f"case {i}")
             else:
                 ax[row][0].plot(coordinates[i][row][:, 0] / d, line_samples_mean[i][row][:, 7] / u_inf)
             ax[row][1].plot(coordinates[i][row][:, 0] / d, line_samples_mean[i][row][:, 10] / u_inf ** 2)
@@ -556,7 +529,7 @@ if __name__ == "__main__":
         for i in range(len(cases)):
             if row == 0:
                 ax[row][0].plot(coordinates[i][row][:, 0] / d, line_samples_mean[i][row][:, 8] / u_inf,
-                                label=f"mesh {i}")
+                                label=f"case {i}")
             else:
                 ax[row][0].plot(coordinates[i][row][:, 0] / d, line_samples_mean[i][row][:, 8] / u_inf)
             ax[row][1].plot(coordinates[i][row][:, 0] / d, line_samples_mean[i][row][:, 13] / u_inf ** 2)
@@ -570,17 +543,20 @@ if __name__ == "__main__":
     fig.subplots_adjust(top=0.94)
     plt.savefig(join(save_dir, "V_xd_Vprime2Mean.png"))
     plt.close("all")
+    del coordinates, line_samples_mean
 
     # """
     # load and plot plane samplings (not present in paper)
     for c in range(len(cases)):
-        coordinates, plane = load_sampling_planes(join(load_dir, cases[c]), "U_plane_xy.raw")
+        loader = CSVDataloader.from_foam_surface(join(load_dir, cases[c], "postProcessing", "sample_planes"),
+                                                 "U_plane_xy.raw")
+        U = loader.load_snapshot("U", loader.write_times)
 
         # plot mean and std. deviation for all components
         fig, ax = plt.subplots(nrows=2, ncols=2, sharex="all", sharey="all", figsize=(6, 6))
         for row in range(2):
-            ax[row][0].tricontourf(coordinates[:, 0] / d, coordinates[:, 1] / d, plane[:, row, :].mean(-1))
-            ax[row][1].tricontourf(coordinates[:, 0] / d, coordinates[:, 1] / d, plane[:, row, :].std(-1))
+            ax[row][0].tricontourf(loader.vertices[:, 0] / d, loader.vertices[:, 1] / d, U[:, row, :].mean(-1))
+            ax[row][1].tricontourf(loader.vertices[:, 0] / d, loader.vertices[:, 1] / d, U[:, row, :].std(-1))
             ax[row][0].add_patch(Circle((cylinder_position[0] / d, cylinder_position[1] / d), radius=1 / 2,
                                         color="white"))
             ax[row][1].add_patch(Circle((cylinder_position[0] / d, cylinder_position[1] / d), radius=1 / 2,
@@ -596,16 +572,19 @@ if __name__ == "__main__":
         ax[1][1].set_title(r"$\sigma\left(v\right)$")
         fig.tight_layout()
         fig.subplots_adjust()
-        plt.savefig(join(save_dir, f"mean_std_U_xy_plane_mesh{c}.png"))
+        plt.savefig(join(save_dir, f"mean_std_U_xy_plane_case{c}.png"))
         plt.close("all")
+        del loader, U
 
         # same for x-z-plane
-        coordinates, plane = load_sampling_planes(join(load_dir, cases[c]), "U_plane_xz.raw")
+        loader = CSVDataloader.from_foam_surface(join(load_dir, cases[c], "postProcessing", "sample_planes"),
+                                                 "U_plane_xy.raw")
+        U = loader.load_snapshot("U", loader.write_times)
         dim = [0, 2]
         fig, ax = plt.subplots(nrows=2, ncols=2, sharex="all", sharey="all", figsize=(6, 4))
         for row in range(2):
-            ax[row][0].tricontourf(coordinates[:, 0] / d, coordinates[:, 2] / d, plane[:, dim[row], :].mean(-1))
-            ax[row][1].tricontourf(coordinates[:, 0] / d, coordinates[:, 2] / d, plane[:, dim[row], :].std(-1))
+            ax[row][0].tricontourf(loader.vertices[:, 0] / d, loader.vertices[:, 2] / d, U[:, dim[row], :].mean(-1))
+            ax[row][1].tricontourf(loader.vertices[:, 0] / d, loader.vertices[:, 2] / d, U[:, dim[row], :].std(-1))
             ax[row][0].add_patch(Rectangle((cylinder_position[0] / d - 1/2, 0), width=1, height=pt.pi,
                                            color="white"))
             ax[row][1].add_patch(Rectangle((cylinder_position[0] / d - 1/2, 0), width=1, height=pt.pi,
@@ -621,23 +600,8 @@ if __name__ == "__main__":
         ax[1][1].set_title(r"$\sigma\left(w\right)$")
         fig.tight_layout()
         fig.subplots_adjust()
-        plt.savefig(join(save_dir, f"mean_std_U_xz_plane_mesh{c}.png"))
+        plt.savefig(join(save_dir, f"mean_std_U_xz_plane_case{c}.png"))
         plt.close("all")
+
+        del loader, U
     # """
-
-    """
-    # plot probe positions as sanity check
-    probes = get_probe_locations(load_dir)
-    domain_xy = [[0, 2.4], [0, 2.0]]        # [[xmin, xmax], [ymin, ymax]]
-    cylinder_pos = (0.8, 1.0)
-
-    fig, ax = plt.subplots(1, 1, figsize=(6, 5))
-    ax.scatter(probes[:, 0], probes[:, 1], color="red", zorder=10)
-    ax.add_patch(Circle(cylinder_pos, radius=d/2, color="gray"))
-    ax.add_patch(Rectangle((domain_xy[0][0], domain_xy[1][0]), width=domain_xy[0][1], height=domain_xy[1][1],
-                            edgecolor="black", linewidth=2, facecolor="none"))
-    ax.set_aspect("equal")
-    ax.set_xticks([])
-    ax.set_yticks([])
-    plt.show()
-    """
