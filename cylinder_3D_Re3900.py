@@ -13,7 +13,7 @@ from flowtorch.data import CSVDataloader
 
 from glob import glob
 from os import makedirs
-from typing import Union
+from typing import Union, Tuple
 from os.path import join, exists
 from matplotlib.patches import Circle, Rectangle
 
@@ -33,7 +33,7 @@ def get_cfl_number(load_path: str) -> dict:
     except ValueError:
         logs = glob(join(load_path, f"log.pimpleFoam*"))
 
-    data = {"cfl_mean": [], "cfl_max": []}
+    data = {"cfl_mean": [], "cfl_max": [], "write_time": []}
     for log in logs:
         with open(log, "r") as f:
             logfile = f.readlines()
@@ -51,6 +51,8 @@ def get_cfl_number(load_path: str) -> dict:
             if line.startswith("Courant Number mean") and start_line:
                 data["cfl_mean"].append(float(line.split(" ")[3]))
                 data["cfl_max"].append(float(line.split(" ")[-1].strip("\n")))
+            elif line.startswith("Time = ") and start_line:
+                data["write_time"].append(float(line.split()[-1].strip("\n")))
             else:
                 continue
 
@@ -66,7 +68,7 @@ def load_residuals(load_path: str):
     return res[0] if len(res) == 1 else pd.concat(res)
 
 
-def get_pimple_iterations(load_path: str) -> list:
+def get_pimple_iterations(load_path: str) -> Tuple[list, list]:
     """
     gets the number of PIMPLE iterations (p-U-couplings)
 
@@ -81,7 +83,7 @@ def get_pimple_iterations(load_path: str) -> list:
     except ValueError:
         logs = glob(join(load_path, f"log.pimpleFoam*"))
 
-    data = []
+    data, times = [], []
     for log in logs:
         with open(log, "r") as f:
             logfile = f.readlines()
@@ -89,7 +91,9 @@ def get_pimple_iterations(load_path: str) -> list:
         for line in logfile:
             if line.startswith(pattern[0]) or line.startswith(pattern[1]):
                 data.append(int(line.split(" ")[-2]))
-    return data
+            elif line.startswith("Time = "):
+                times.append(float(line.split()[-1].strip("\n")))
+    return times, data
 
 
 def get_probe_locations(load_path: str) -> pt.Tensor:
@@ -136,9 +140,9 @@ def load_probes(load_path: str, num_probes: int, filename: str = "p", skip_n_poi
             # as well
             for k in names:
                 if k.startswith("ux"):
-                    probe[k] = probe[k].str.replace("(", "", regex=True).astype(float)
+                    probe[k] = probe[k].str.replace(r"\(", "", regex=True).astype(float)
                 elif k.startswith("uz"):
-                    probe[k] = probe[k].str.replace(")", "", regex=True).astype(float)
+                    probe[k] = probe[k].str.replace(r"\)", "", regex=True).astype(float)
                 else:
                     continue
         _probes.append(probe)
@@ -283,12 +287,11 @@ if __name__ == "__main__":
     # we write out the residuals every time step
     for i in range(len(cases)):
         fig, ax = plt.subplots(1, 1, sharex="col", figsize=(6, 3))
-        t = pt.linspace(residuals[i].t.iloc[0], residuals[i].t.iloc[-1], len(cfl[i]["cfl_mean"]))
-        ax.plot(t * u_inf / d, cfl[i]["cfl_mean"], label=r"$\mu\left(CFL\right)$")
-        ax.plot(t * u_inf / d, cfl[i]["cfl_max"], label=r"$max\left(CFL\right)$")
+        ax.plot(pt.tensor(cfl[i]["write_time"]) * u_inf / d, cfl[i]["cfl_mean"], label=r"$\mu\left(CFL\right)$")
+        ax.plot(pt.tensor(cfl[i]["write_time"]) * u_inf / d, cfl[i]["cfl_max"], label=r"$max\left(CFL\right)$")
         ax.set_xlabel(r"$t \frac{U_{\infty}}{d}$")
         ax.set_ylabel("$Co$")
-        ax.set_xlim(0, residuals[i].t.iloc[-1] * u_inf / d)
+        ax.set_xlim(min(cfl[0]["write_time"]), max(cfl[0]["write_time"]) * u_inf / d)
         fig.tight_layout()
         fig.subplots_adjust()
         ax.legend(loc="upper right", ncols=4)
@@ -300,11 +303,10 @@ if __name__ == "__main__":
 
     fig, ax = plt.subplots(1, 1, figsize=(6, 3))
     for i in range(len(cases)):
-        t = pt.linspace(residuals[i].t.iloc[0], residuals[i].t.iloc[-1], len(n_iter[i])) * u_inf / d
-        ax.plot(t, n_iter[i], label=f"case {i}")
+        ax.plot(pt.tensor(n_iter[i][0]) * u_inf / d, n_iter[i][1], label=f"case {i}")
     ax.set_xlabel(r"$t \frac{U_{\infty}}{d}$")
     ax.set_ylabel("$N_{PIMPLE}$")
-    ax.set_xlim(residuals[0].t.iloc[0], residuals[0].t.iloc[-1] * u_inf / d)
+    ax.set_xlim(min(n_iter[0][0]) * u_inf / d, max(n_iter[0][0]) * u_inf / d)
     fig.tight_layout()
     fig.legend(ncol=len(cases), loc="upper center")
     fig.subplots_adjust(top=0.88)
@@ -342,7 +344,7 @@ if __name__ == "__main__":
         else:
             plot_probes(save_dir, probes, param=p, scaling_factor=u_inf / d, xlabel=r"$t \frac{U_{\infty}}{d}$",
                         num_probes=n_probes, legend_list=[f"case {i}" for i in range(len(cases))])
-                        
+
     # compute u_tau
     t_start = 0.19225           # start after 75 CTU
     u_tau, grad_u = [], []

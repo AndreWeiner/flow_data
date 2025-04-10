@@ -4,7 +4,7 @@
 #SBATCH --time=96:00:00
 #SBATCH --job-name=cylinder3D
 
-module load development/24.04 GCC/12.3.0 
+module load release/24.04 GCC/12.3.0
 module load OpenMPI/4.1.5
 module load OpenFOAM/v2312 
 source $FOAM_BASH
