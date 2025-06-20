@@ -235,7 +235,7 @@ functions
         executeInterval  1;
         writeControl     writeTime;
         writeInterval    100;
-        startTime        0.19225;
+        timeStart        0.19225;
 
         fields
         (
