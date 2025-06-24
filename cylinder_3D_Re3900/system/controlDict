@@ -54,7 +54,7 @@ functions
         writeControl     timeStep;
         writeInterval    1;
         log              false; 
-        startTime        0;
+        timeStart        0;
         patches
         (
             cylinder
@@ -81,7 +81,7 @@ functions
         executeInterval  1;
         writeControl     timeStep;
         writeInterval    25;
-        startTime        0.19225;   // U = 39m/s, D = 0.1m -> start at 75 tU/D -> t_tilde_end = 75
+        timeStart        0.19225;   // U = 39m/s, D = 0.1m -> start at 75 tU/D -> t_tilde_end = 75
     }
 
     sample_planes
@@ -94,7 +94,7 @@ functions
         writeControl     timeStep;
         writeInterval    25;
         surfaceFormat    raw;
-        startTime        0.19225;
+        timeStart        0.19225;
         formatOptions
         {
             raw 
@@ -138,7 +138,7 @@ functions
         executeInterval  1;
         writeControl     timeStep;
         writeInterval    25;
-        startTime        0.19225;
+        timeStart        0.19225;
         setFormat        csv;
         fields          (p U UMean pMean UPrime2Mean pPrime2Mean);
         sets
@@ -208,7 +208,7 @@ functions
         executeInterval     1;
         writeControl        timeStep;
         writeInterval       1;
-        startTime           0;
+        timeStart           0;
         fields              (U p);
         fixedLocations      true;
         interpolationScheme cell;
@@ -235,7 +235,7 @@ functions
         executeInterval  1;
         writeControl     writeTime;
         writeInterval    100;
-        startTime        0.19225;
+        timeStart        0.19225;
 
         fields
         (
@@ -264,7 +264,7 @@ functions
             executeInterval  1;
             writeControl     timeStep;
             writeInterval    1;
-            startTime        0;
+            timeStart        0;
     }
 }
 
